@@ -1,0 +1,193 @@
+{
+  "id": "lembretesWpp0001",
+  "name": "Lembretes de agendamento",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "b1b2c3d4-0001-4000-8000-000000000001",
+      "name": "A cada 15 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "b1b2c3d4-0006-4000-8000-000000000006",
+      "name": "Rodar manualmente",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        480
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "b1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Pegar e marcar lembretes",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        220,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "agendaPostgres01",
+          "name": "Postgres agenda"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "-- Agendamentos nas próximas 24h que ainda não receberam lembrete\n-- (ignora os marcados há menos de 2h, que acabaram de receber a confirmação)\nUPDATE agendamentos a SET lembrete_enviado = true\n  FROM servicos s\n WHERE s.id = a.servico_id\n   AND a.status = 'confirmado'\n   AND NOT a.lembrete_enviado\n   AND a.criado_em < now() - interval '2 hours'\n   AND a.inicio >  (now() AT TIME ZONE 'America/Boa_Vista')\n   AND a.inicio <= (now() AT TIME ZONE 'America/Boa_Vista') + interval '24 hours'\nRETURNING a.id, a.telefone, a.nome, a.idioma, to_char(a.inicio, 'YYYY-MM-DD\"T\"HH24:MI') AS inicio,\n          s.nome_pt, s.nome_es, s.nome_en;",
+        "options": {}
+      }
+    },
+    {
+      "id": "b1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Montar lembretes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "jsCode": "__CODE:motor.js,n8n/lembretes.js__"
+      }
+    },
+    {
+      "id": "b1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Enviar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c0000003-0000-4000-8000-000000000003",
+              "leftValue": "={{ $json.enviar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "b1b2c3d4-0005-4000-8000-000000000005",
+      "name": "Enviar pelo WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCIA }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.EVOLUTION_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.telefone, text: $json.resposta }) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "A cada 15 minutos": {
+      "main": [
+        [
+          {
+            "node": "Pegar e marcar lembretes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pegar e marcar lembretes": {
+      "main": [
+        [
+          {
+            "node": "Montar lembretes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar lembretes": {
+      "main": [
+        [
+          {
+            "node": "Enviar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar?": {
+      "main": [
+        [
+          {
+            "node": "Enviar pelo WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Rodar manualmente": {
+      "main": [
+        [
+          {
+            "node": "Pegar e marcar lembretes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

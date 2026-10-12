@@ -1,0 +1,194 @@
+{
+  "id": "resumoDiario0001",
+  "name": "Resumo diário para o dono",
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "nodes": [
+    {
+      "id": "d1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Seg a sáb às 7h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * 1-6"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "d1b2c3d4-0006-4000-8000-000000000006",
+      "name": "Rodar manualmente",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        480
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "d1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Agenda de hoje",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        220,
+        300
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "agendaPostgres01",
+          "name": "Postgres agenda"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT a.id, a.nome, a.idioma, to_char(a.inicio, 'HH24:MI') AS hora, s.nome_pt AS servico\n  FROM agendamentos a JOIN servicos s ON s.id = a.servico_id\n WHERE a.status = 'confirmado'\n   AND a.inicio::date = (now() AT TIME ZONE 'America/Boa_Vista')::date\n ORDER BY a.inicio;",
+        "options": {}
+      }
+    },
+    {
+      "id": "d1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Montar resumo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "jsCode": "__CODE:n8n/resumo.js__"
+      }
+    },
+    {
+      "id": "d1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Enviar?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c0000004-0000-4000-8000-000000000004",
+              "leftValue": "={{ $json.enviar }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "d1b2c3d4-0005-4000-8000-000000000005",
+      "name": "Enviar para o dono",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.EVOLUTION_URL }}/message/sendText/{{ $env.EVOLUTION_INSTANCIA }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "={{ $env.EVOLUTION_API_KEY }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ number: $json.telefone, text: $json.resposta }) }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Seg a sáb às 7h": {
+      "main": [
+        [
+          {
+            "node": "Agenda de hoje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agenda de hoje": {
+      "main": [
+        [
+          {
+            "node": "Montar resumo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar resumo": {
+      "main": [
+        [
+          {
+            "node": "Enviar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar?": {
+      "main": [
+        [
+          {
+            "node": "Enviar para o dono",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Rodar manualmente": {
+      "main": [
+        [
+          {
+            "node": "Agenda de hoje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
