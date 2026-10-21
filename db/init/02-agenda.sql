@@ -34,6 +34,19 @@ CREATE TABLE conversas (
   atualizado_em  timestamptz NOT NULL DEFAULT now()
 );
 
+-- Dias sem atendimento (feriado, folga, férias). O robô não oferece horários nesses dias.
+CREATE TABLE bloqueios (
+  dia     date PRIMARY KEY,
+  motivo  text
+);
+
+INSERT INTO bloqueios (dia, motivo) VALUES
+  ('2026-11-02', 'Finados'),
+  ('2026-11-15', 'Proclamação da República'),
+  ('2026-11-20', 'Consciência Negra'),
+  ('2026-12-25', 'Natal'),
+  ('2027-01-01', 'Confraternização Universal');
+
 INSERT INTO servicos (nome_pt, nome_es, nome_en) VALUES
   ('Consulta',          'Consulta',          'Consultation'),
   ('Retorno',           'Control',           'Follow-up'),

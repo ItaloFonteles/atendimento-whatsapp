@@ -61,7 +61,7 @@ services:
     volumes:
       - evolution_instances:/evolution/instances
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"   # painel só no seu PC; o n8n fala com ela pela rede interna do Docker
 
   # Automação: atendimento, lembretes e resumo diário
   n8n:
@@ -95,7 +95,7 @@ services:
       - n8n_data:/home/node/.n8n
       - ./n8n:/setup:ro
     ports:
-      - "5678:5678"
+      - "127.0.0.1:5678:5678"   # só no seu PC; a Evolution chama o webhook por http://n8n:5678
 
 volumes:
   postgres_data:

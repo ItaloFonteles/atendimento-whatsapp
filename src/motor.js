@@ -54,8 +54,10 @@ const T = {
     semAgendamentos: 'Você não tem agendamentos marcados.',
     cancelarPergunta: (d) => `Cancelar o agendamento de *${d}*?\n\n1️⃣ Sim, cancelar\n2️⃣ Não`,
     cancelado: '❌ Agendamento cancelado.',
-    info: (c) =>
-      `📍 *${c.empresa}*\n${c.endereco}\n${c.mapa}\n\n🕗 Segunda a sexta: 8h–12h e 14h–18h\nSábado: 8h–12h`,
+    info: (c, horario) => `📍 *${c.empresa}*\n${c.endereco}\n${c.mapa}\n\n🕗 ${horario}`,
+    midia: 'Ainda não consigo ouvir áudios nem ver fotos. 🙏\nResponda com o *número* da opção ou digite *menu*. Para falar com uma pessoa, digite *4* no menu.',
+    semServicos: 'No momento não há serviços disponíveis para agendar. 😕 Digite *4* para falar com um atendente.',
+    deNada: 'Por nada! 🙂 Se precisar de algo, digite *menu*.',
     humano: 'Certo! Um atendente vai responder você em breve. 🙂\n_Para voltar ao atendimento automático, digite *menu*._',
     voltar: '0️⃣ Voltar',
     as: 'às',
@@ -80,8 +82,10 @@ const T = {
     semAgendamentos: 'No tienes citas agendadas.',
     cancelarPergunta: (d) => `¿Cancelar la cita del *${d}*?\n\n1️⃣ Sí, cancelar\n2️⃣ No`,
     cancelado: '❌ Cita cancelada.',
-    info: (c) =>
-      `📍 *${c.empresa}*\n${c.endereco}\n${c.mapa}\n\n🕗 Lunes a viernes: 8h–12h y 14h–18h\nSábado: 8h–12h`,
+    info: (c, horario) => `📍 *${c.empresa}*\n${c.endereco}\n${c.mapa}\n\n🕗 ${horario}`,
+    midia: 'Todavía no puedo escuchar audios ni ver fotos. 🙏\nResponde con el *número* de la opción o escribe *menu*. Para hablar con una persona, escribe *4* en el menú.',
+    semServicos: 'Por ahora no hay servicios disponibles para agendar. 😕 Escribe *4* para hablar con una persona.',
+    deNada: '¡De nada! 🙂 Si necesitas algo, escribe *menu*.',
     humano: '¡Listo! Una persona te responderá pronto. 🙂\n_Para volver a la atención automática, escribe *menu*._',
     voltar: '0️⃣ Volver',
     as: 'a las',
@@ -106,8 +110,10 @@ const T = {
     semAgendamentos: "You don't have any appointments booked.",
     cancelarPergunta: (d) => `Cancel the appointment on *${d}*?\n\n1️⃣ Yes, cancel\n2️⃣ No`,
     cancelado: '❌ Appointment cancelled.',
-    info: (c) =>
-      `📍 *${c.empresa}*\n${c.endereco}\n${c.mapa}\n\n🕗 Monday to Friday: 8am–12pm and 2pm–6pm\nSaturday: 8am–12pm`,
+    info: (c, horario) => `📍 *${c.empresa}*\n${c.endereco}\n${c.mapa}\n\n🕗 ${horario}`,
+    midia: "I can't listen to audio or see pictures yet. 🙏\nPlease reply with the *number* of an option or type *menu*. To talk to a person, type *4* in the menu.",
+    semServicos: 'There are no services available to book right now. 😕 Type *4* to talk to a person.',
+    deNada: "You're welcome! 🙂 If you need anything, type *menu*.",
     humano: 'Sure! A person will reply to you soon. 🙂\n_To go back to the automatic service, type *menu*._',
     voltar: '0️⃣ Back',
     as: 'at',
@@ -116,7 +122,9 @@ const T = {
 
 const BOAS_VINDAS = () =>
   `Olá! 👋 Bem-vindo(a) à *${CONFIG.empresa}*.\n¡Hola! Bienvenido(a). · Hi! Welcome.\n\n` +
-  'Escolha o idioma · Elige el idioma · Choose your language:\n\n1️⃣ Português\n2️⃣ Español\n3️⃣ English';
+  'Escolha o idioma · Elige el idioma · Choose your language:\n\n1️⃣ Português\n2️⃣ Español\n3️⃣ English\n\n' +
+  '🔒 _Seu nome e telefone são usados só para o agendamento._\n' +
+  '_Tu nombre y teléfono se usan solo para la cita. · Your name and phone are used only for your appointment._';
 
 // ---------------------------------------------------------------------
 // Datas: trabalhamos com o horário local como texto "AAAA-MM-DDTHH:MM"
@@ -133,10 +141,53 @@ function rotuloDia(diaIso, idioma) {
   const d = paraData(diaIso.slice(0, 10));
   return `${DIAS[idioma][d.getUTCDay()]}, ${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}`;
 }
+// Texto do horário de funcionamento, gerado do CONFIG.expediente para nunca ficar desatualizado.
+// Ex.: "Segunda a sexta: 8h–12h e 14h–18h\nSábado: 8h–12h"
+const DIAS_LONGOS = {
+  pt: ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'],
+  es: ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'],
+  en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+};
+const LIGA = { pt: ['a', 'e'], es: ['a', 'y'], en: ['to', 'and'] };
+
+function formatarHora(hhmm, idioma) {
+  const [h, m] = hhmm.split(':').map(Number);
+  if (idioma === 'en') {
+    const h12 = h % 12 || 12;
+    return `${h12}${m ? ':' + pad(m) : ''}${h < 12 ? 'am' : 'pm'}`;
+  }
+  return `${h}h${m ? pad(m) : ''}`;
+}
+
+function horarioTexto(idioma) {
+  const ordem = [1, 2, 3, 4, 5, 6, 0];                       // segunda primeiro
+  const chave = (d) => JSON.stringify(CONFIG.expediente[d] || []);
+  const grupos = [];
+  for (const d of ordem) {
+    if (!(CONFIG.expediente[d] || []).length) continue;
+    const ultimo = grupos[grupos.length - 1];
+    const anterior = ordem[ordem.indexOf(d) - 1];
+    if (ultimo && ultimo.fim === anterior && chave(ultimo.ini) === chave(d)) ultimo.fim = d;
+    else grupos.push({ ini: d, fim: d });
+  }
+  const [a, e] = LIGA[idioma];
+  return grupos.map(({ ini, fim }) => {
+    const dias = ini === fim
+      ? DIAS_LONGOS[idioma][ini]
+      // "Segunda a sexta" / "Lunes a viernes", mas "Monday to Friday"
+      : `${DIAS_LONGOS[idioma][ini]} ${a} ${idioma === 'en' ? DIAS_LONGOS.en[fim] : DIAS_LONGOS[idioma][fim].toLowerCase()}`;
+    const turnos = CONFIG.expediente[ini]
+      .map(([i, f]) => `${formatarHora(i, idioma)}–${formatarHora(f, idioma)}`)
+      .join(` ${e} `);
+    return `${dias}: ${turnos}`;
+  }).join('\n');
+}
+
 const rotuloCompleto = (iso, idioma) => `${rotuloDia(iso, idioma)} ${T[idioma].as} ${iso.slice(11, 16)}`;
 
-// Horários livres de um dia (AAAA-MM-DD)
-function horariosLivres(dia, agora, ocupados) {
+// Horários livres de um dia (AAAA-MM-DD). "bloqueios" são dias fechados (feriado, folga, férias).
+function horariosLivres(dia, agora, ocupados, bloqueios = []) {
+  if (bloqueios.includes(dia)) return [];
   const semana = paraData(dia).getUTCDay();
   const turnos = CONFIG.expediente[semana] || [];
   const limite = somarMin(agora, CONFIG.antecedenciaMin);
@@ -151,11 +202,11 @@ function horariosLivres(dia, agora, ocupados) {
 }
 
 // Próximos dias que ainda têm vaga
-function diasComVaga(agora, ocupados) {
+function diasComVaga(agora, ocupados, bloqueios = []) {
   const dias = [];
   for (let i = 0; i < 30 && dias.length < CONFIG.diasExibidos; i++) {
     const dia = somarMin(agora.slice(0, 10) + 'T00:00', i * 1440).slice(0, 10);
-    if (horariosLivres(dia, agora, ocupados).length) dias.push(dia);
+    if (horariosLivres(dia, agora, ocupados, bloqueios).length) dias.push(dia);
   }
   return dias;
 }
@@ -166,6 +217,42 @@ const lista = (itens, idioma) =>
 const normalizar = (s) =>
   String(s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
+// Aceita "1", "1️⃣" (emoji copiado do menu), "1.", "1)", "opção 1", "opcion 2", "option 3"
+function extrairNumero(cmd) {
+  const limpo = cmd.replace(/[\uFE0F\u20E3]/g, '').trim();
+  const m = limpo.match(/^(?:(?:opcao|opcion|option|op|n|no|numero)\s*)?(\d{1,2})\s*[.)]?$/);
+  return m ? Number(m[1]) : null;
+}
+
+// Palavras que levam direto a uma opção do menu. A ordem de verificação importa:
+// "cancelar minha consulta" é 2 (Meus agendamentos), não 1.
+const PALAVRAS_MENU = [
+  [4, ['atendente', 'pessoa', 'humano', 'falar com alguem', 'persona', 'asesor', 'human', 'person', 'agent']],
+  [2, ['meus agendamentos', 'meu agendamento', 'cancelar', 'desmarcar', 'remarcar', 'mis citas', 'mi cita',
+       'cancel', 'my appointment', 'my appointments']],
+  [1, ['agendar', 'marcar', 'reservar', 'cita', 'book', 'appointment', 'schedule']],
+  [3, ['endereco', 'onde fica', 'localizacao', 'funcionamento', 'direccion', 'ubicacion', 'address',
+       'location', 'opening hours']],
+];
+const temPalavra = (cmd, palavras) => palavras.some((p) => new RegExp(`(^|\\s)${p}(\\s|$|[?!.,])`).test(cmd));
+const opcaoPorPalavra = (cmd) => (PALAVRAS_MENU.find(([, ps]) => temPalavra(cmd, ps)) || [null])[0];
+
+const SAUDACAO = /^(oi+e?|ola|hola|hi|hello|hey|e ai|bom dia|boa tarde|boa noite|buen(os|as) (dias|tardes|noches)|good (morning|afternoon|evening))\b/;
+const AGRADECIMENTO = /^(obrigad[oa]|obg|valeu|vlw|gracias|thanks|thank you|thx)\b/;
+const ehSaudacao = (cmd) => SAUDACAO.test(cmd) && cmd.split(/\s+/).length <= 4;
+const ehAgradecimento = (cmd) => AGRADECIMENTO.test(cmd) && cmd.split(/\s+/).length <= 4;
+
+// Nome: pelo menos 3 letras, sem números, e não pode ser uma resposta solta ("sim", "kkk", "ok")
+const NAO_SAO_NOMES = new Set(['sim', 'nao', 'ok', 'okay', 'oi', 'ola', 'hola', 'si', 'yes', 'no', 'menu',
+  'teste', 'test', 'obrigado', 'obrigada', 'gracias', 'thanks', 'eu', 'yo', 'me', 'confirmar', 'cancelar']);
+function nomeValido(texto) {
+  const t = String(texto || '').trim();
+  const n = normalizar(t);
+  const letras = (t.match(/\p{L}/gu) || []).length;
+  const risada = /^(k+|(ha)+h?|(he)+h?|(rs)+|a+|s+)$/.test(n.replace(/\s+/g, ''));
+  return letras >= 3 && !/\d/.test(t) && !NAO_SAO_NOMES.has(n) && !risada;
+}
+
 const nomeServico = (s, idioma) => s[`nome_${idioma}`] || s.nome_pt;
 
 // ---------------------------------------------------------------------
@@ -174,8 +261,9 @@ const nomeServico = (s, idioma) => s[`nome_${idioma}`] || s.nome_pt;
 function processar(e) {
   const texto = String(e.texto || '').trim();
   const cmd = normalizar(texto);
-  const num = /^\d+$/.test(cmd) ? Number(cmd) : null;
+  const num = extrairNumero(cmd);
   const ocupados = e.ocupados || [];
+  const bloqueios = e.bloqueios || [];
   const servicos = e.servicos || [];
   const meus = e.meus || [];
 
@@ -191,18 +279,19 @@ function processar(e) {
   const primeiroNome = () => String(dados.nome_cliente || e.nome || '').split(' ')[0];
   const mostrarMenu = () => { ir('menu'); msgs.push(t().menu(primeiroNome())); };
   const mostrarServicos = () => {
+    if (!servicos.length) { msgs.push(t().semServicos); return mostrarMenu(); }
     ir('servico');
     msgs.push(`${t().servicos}\n\n${lista(servicos.map((s) => nomeServico(s, idioma)), idioma)}`);
   };
   const mostrarDias = () => {
-    const dias = diasComVaga(e.agora, ocupados);
+    const dias = diasComVaga(e.agora, ocupados, bloqueios);
     if (!dias.length) { msgs.push(t().semDias); return mostrarMenu(); }
     dados.dias = dias;
     ir('dia');
     msgs.push(`${t().dias}\n\n${lista(dias.map((d) => rotuloDia(d, idioma)), idioma)}`);
   };
   const mostrarHoras = () => {
-    const horas = horariosLivres(dados.dia, e.agora, ocupados);
+    const horas = horariosLivres(dados.dia, e.agora, ocupados, bloqueios);
     if (!horas.length) return mostrarDias();
     dados.horas = horas;
     ir('hora');
@@ -235,6 +324,13 @@ function processar(e) {
     // Atendente humano está cuidando da conversa: o robô não responde.
     return { telefone: e.telefone, resposta: '', conversa: { idioma, etapa, dados }, acao };
   }
+  if (e.midia) {
+    // Áudio, foto, figurinha...: avisa e continua na mesma etapa.
+    // Sem idioma escolhido ainda, a própria tela de boas-vindas já serve de resposta.
+    if (idioma) msgs.push(t().midia);
+    else { ir('idioma'); msgs.push(BOAS_VINDAS()); }
+    return { telefone: e.telefone, resposta: msgs.join('\n\n'), conversa: { idioma, etapa, dados }, acao };
+  }
   if (['idioma', 'language', 'lenguaje'].includes(cmd) || !idioma) {
     ir('idioma');
   } else if (cmd === 'menu' || etapa === 'humano' ||
@@ -258,14 +354,18 @@ function processar(e) {
       break;
     }
 
-    case 'menu':
-      if (num === 1) mostrarServicos();
-      else if (num === 2) mostrarMeus();
-      else if (num === 3) { msgs.push(t().info(CONFIG)); mostrarMenu(); }
-      else if (num === 4) { ir('humano'); msgs.push(t().humano); }
-      else if (num === 0) { ir('idioma'); msgs.push(BOAS_VINDAS()); }
+    case 'menu': {
+      const opcao = num ?? opcaoPorPalavra(cmd);
+      if (opcao === 1) mostrarServicos();
+      else if (opcao === 2) mostrarMeus();
+      else if (opcao === 3) { msgs.push(t().info(CONFIG, horarioTexto(idioma))); mostrarMenu(); }
+      else if (opcao === 4) { ir('humano'); msgs.push(t().humano); }
+      else if (opcao === 0) { ir('idioma'); msgs.push(BOAS_VINDAS()); }
+      else if (ehAgradecimento(cmd)) msgs.push(t().deNada);
+      else if (ehSaudacao(cmd)) mostrarMenu();
       else invalido(mostrarMenu);
       break;
+    }
 
     case 'servico':
       if (num === 0) mostrarMenu();
@@ -291,7 +391,7 @@ function processar(e) {
 
     case 'nome':
       if (num === 0) mostrarHoras();
-      else if (texto.length >= 3 && !/^\d+$/.test(texto)) { dados.nome_cliente = texto.slice(0, 80); mostrarResumo(); }
+      else if (nomeValido(texto)) { dados.nome_cliente = texto.slice(0, 80); mostrarResumo(); }
       else { msgs.push(t().nome); }
       break;
 
@@ -342,4 +442,6 @@ function textoLembrete(idioma, nome, servico, inicio) {
   }[i];
 }
 
-if (typeof module !== 'undefined') module.exports = { processar, textoLembrete, horariosLivres, diasComVaga, CONFIG };
+if (typeof module !== 'undefined') module.exports = {
+  processar, textoLembrete, horariosLivres, diasComVaga, horarioTexto, extrairNumero, nomeValido, CONFIG,
+};
