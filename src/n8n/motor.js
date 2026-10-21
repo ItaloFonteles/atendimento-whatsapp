@@ -11,11 +11,13 @@ const r = processar({
   telefone: msg.telefone,
   texto: msg.texto,
   nome: msg.nome,
+  midia: msg.midia === true,
   agora: $now.setZone('America/Boa_Vista').toFormat("yyyy-MM-dd'T'HH:mm"),
   conversa,
   minutosDesdeUltima,
   servicos: banco.servicos || [],
   ocupados: banco.ocupados || [],
+  bloqueios: banco.bloqueios || [],
   meus: banco.meus || [],
 });
 
