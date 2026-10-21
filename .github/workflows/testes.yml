@@ -1,0 +1,19 @@
+# Roda os testes do motor de conversa a cada push e pull request
+name: testes
+
+on: [push, pull_request]
+
+jobs:
+  motor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Testes
+        run: node --test
+      - name: Fluxos do n8n estão atualizados com o código de src/
+        run: |
+          node scripts/montar-workflows.js
+          git diff --exit-code n8n/workflows || (echo "Rode: node scripts/montar-workflows.js e faça commit" && exit 1)

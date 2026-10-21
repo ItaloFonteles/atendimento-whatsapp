@@ -1,5 +1,7 @@
 # Atendimento e Agendamento Trilíngue no WhatsApp
 
+[![testes](https://github.com/ItaloFonteles/atendimento-whatsapp/actions/workflows/testes.yml/badge.svg)](https://github.com/ItaloFonteles/atendimento-whatsapp/actions/workflows/testes.yml)
+
 Robô de WhatsApp que **atende em português, espanhol e inglês**, mostra os horários livres, **agenda, lista e cancela** atendimentos, envia **lembretes** antes do horário e manda para o dono um **resumo diário** da agenda.
 
 Feito para clínicas, salões, escritórios e comércios de **Boa Vista - RR** que atendem clientes brasileiros, venezuelanos e guianenses.
@@ -42,6 +44,12 @@ Robô:    ✅ ¡Cita confirmada para el *Mar, 13/10 a las 09:00*!
 ## Funcionalidades
 
 - Escolha de idioma (PT / ES / EN); todas as mensagens, dias da semana e lembretes no idioma do cliente.
+- Entende o jeito que as pessoas escrevem: `1`, `1️⃣` (emoji copiado do menu), `1.`, `opção 1`, e palavras como *agendar*, *cancelar*, *endereço* ou *falar com atendente*.
+- Responde a saudações e agradecimentos sem "Não entendi", e recusa respostas que não são nome (*kkk*, *sim*, *ok*).
+- Áudio, foto ou figurinha recebem um aviso no idioma do cliente, em vez de silêncio.
+- **Feriados e folgas** bloqueados na tabela `bloqueios`: o robô não oferece horário nesses dias.
+- O horário de funcionamento informado ao cliente é gerado do expediente configurado (nunca fica desatualizado).
+- Aviso de uso dos dados (LGPD) já na mensagem de boas-vindas.
 - Agendamento passo a passo: serviço → dia → horário → nome → confirmação.
 - Só mostra horários livres, respeitando expediente, antecedência mínima e dias sem atendimento.
 - **Não permite duas reservas no mesmo horário**, nem se duas pessoas confirmarem ao mesmo tempo (índice único no banco).
@@ -107,6 +115,7 @@ Pronto: mensagens que chegarem nesse número passam pelo robô.
 | Nome da empresa, endereço, mapa, expediente, duração dos horários | `CONFIG` no topo de `src/motor.js` |
 | Textos das mensagens (PT / ES / EN) | objeto `T` em `src/motor.js` |
 | Serviços oferecidos | tabela `servicos` no banco (ou `db/init/02-agenda.sql` antes de subir pela 1ª vez) |
+| Feriados, folgas e férias | tabela `bloqueios` no banco (um dia por linha) |
 | Horário do resumo diário | nó "Seg a sáb às 7h" em `n8n/templates/resumo.json` |
 
 Depois de editar algo em `src/`, monte e importe os fluxos de novo:
@@ -117,12 +126,32 @@ docker compose exec n8n sh /setup/importar.sh
 docker compose restart n8n
 ```
 
-## Testes
-
-O motor de conversa é uma função pura (sem banco e sem rede) com testes automatizados:
+### Bloquear um feriado ou folga
 
 ```bash
-docker run --rm -v "%cd%":/app -w /app node:20-alpine node --test tests/
+docker compose exec postgres psql -U agenda -d agenda -c "INSERT INTO bloqueios VALUES ('2026-12-24', 'Véspera de Natal');"
+```
+
+### Atualizando uma instalação antiga
+
+O banco só é criado na primeira vez que o Postgres sobe. Se você já tinha o sistema rodando antes da tabela `bloqueios`, rode a migração uma vez:
+
+```bash
+docker compose exec -T postgres psql -U agenda -d agenda < db/migracoes/001-bloqueios.sql
+```
+
+## Testes
+
+O motor de conversa é uma função pura (sem banco e sem rede), e o nó que lê as mensagens da Evolution também é testado. Os testes rodam a cada push pelo GitHub Actions:
+
+```bash
+node --test
+```
+
+Sem Node no PC:
+
+```bash
+docker run --rm -v "%cd%":/app -w /app node:20-alpine node --test
 ```
 
 ## Estrutura
@@ -131,7 +160,8 @@ docker run --rm -v "%cd%":/app -w /app node:20-alpine node --test tests/
 atendimento-whatsapp/
 ├── docker-compose.yml        # Postgres, Redis, Evolution API e n8n
 ├── .env.example              # senhas, chaves e modo de teste
-├── db/init/                  # criação dos bancos, tabelas e serviços de exemplo
+├── db/init/                  # criação dos bancos, tabelas, serviços e feriados de exemplo
+├── db/migracoes/             # alterações para quem já tem o banco criado
 ├── src/
 │   ├── motor.js              # lógica da conversa, textos nos 3 idiomas e agenda
 │   └── n8n/                  # código de cada nó "Code" dos fluxos
@@ -142,15 +172,19 @@ atendimento-whatsapp/
 ├── scripts/
 │   ├── montar-workflows.js   # junta templates + src → workflows
 │   └── simular.ps1           # conversa com o robô pelo terminal
-└── tests/motor.test.js
+├── tests/
+│   ├── motor.test.js         # conversa, agenda, feriados, idiomas
+│   └── extrair.test.js       # leitura das mensagens da Evolution e segurança do webhook
+└── .github/workflows/        # testes automáticos a cada push
 ```
 
 ## Cuidados antes de usar com clientes
 
 - **A Evolution API não é a API oficial do WhatsApp.** Ela funciona como o WhatsApp Web, e o WhatsApp pode **bloquear números** que usam automação não oficial, principalmente com envio em massa. Use um **número dedicado** (nunca o pessoal) e só responda quem mandou mensagem. Para clientes maiores, considere a **API oficial (WhatsApp Business Platform / Cloud API da Meta)**, que é paga por conversa.
 - **LGPD:** o sistema guarda nome e telefone. O cliente final deve ser informado (ex.: na primeira mensagem ou no site) e os dados não devem ser usados para outra finalidade.
-- **Produção:** em servidor (VPS), coloque HTTPS na frente do n8n e da Evolution (ex.: Nginx Proxy Manager ou Traefik), feche a porta do Postgres e faça backup do volume `postgres_data`.
+- **Segurança do webhook:** as portas do n8n (5678), da Evolution (8080) e do Postgres (5433) ficam abertas só no próprio computador (`127.0.0.1`); a Evolution conversa com o n8n pela rede interna do Docker. O formato de teste manual (`{telefone, texto}`) só é aceito com `MODO_TESTE=true`, para ninguém usar o robô para mandar mensagens a outros números.
+- **Produção:** em servidor (VPS), coloque HTTPS na frente do n8n e da Evolution (ex.: Nginx Proxy Manager ou Traefik) em vez de abrir as portas, e faça backup do volume `postgres_data`.
 
 ---
 
-Feito por **Ítalo Fonteles** · [Portfólio](https://italofonteles.github.io/portfolio-novo/) · [GitHub](https://github.com/ItaloFonteles)
+Feito por **Ítalo Fonteles** · [italofonteles.dev](https://italofonteles.dev) · [GitHub](https://github.com/ItaloFonteles)
